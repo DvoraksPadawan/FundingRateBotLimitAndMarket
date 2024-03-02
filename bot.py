@@ -111,7 +111,7 @@ class Exchange():
 class Bot():
     def __init__(self, _exchange):
         self.exchange = _exchange
-        self.amount_of_top = 2
+        self.amount_of_top = 10
         self.pairs = []
         self.amount_in_usd = 150
         # self.sleeping_time = 5
@@ -120,27 +120,45 @@ class Bot():
         # self.my_last_ask = 0
         # self.my_last_quantity = 0
 
+
     def get_top_pairs(self):
         response = self.exchange.get_instruments()
         pairs = []
         for pair in response:
             if pair['typ'] == 'FFWCSX':
+                if pair['symbol'] == 'XBTUSD':
+                    self.btc_price = pair['midPrice']
+                    continue
                 pairs.append(Pair(pair))
         pairs.sort(key=lambda x: x.profit, reverse=True)
         self.pairs = pairs[:self.amount_of_top]
 
+    def calculate_contract_price(self, pair):
+        price_in_btc = (pair.mid_price * pair.multiplier) / 10**8
+        price_in_usd = price_in_btc * self.btc_price
+        print("prices:", pair.symbol, price_in_btc, price_in_usd)
+        return price_in_usd
+    
     def open_positions(self):
         for pair in self.pairs:
             if pair.is_open: continue
+            #print(pair.symbol)
+            if pair.collateral == 'USDT':
+                price = pair.mid_price
+            elif pair.collateral == 'USD':
+                price = self.calculate_contract_price(pair)
+            else:
+                continue
+            quantity = int(self.amount_in_usd/price)
+            quantity = int(quantity/pair.lots)*pair.lots
+            print("quants:", pair.symbol, quantity)
             if pair.short:
                 price = pair.ask_price
-                quantity = int(self.amount_in_usd/pair.ask_price)
                 side = "Sell"
             else:
                 price = pair.bid_price
-                quantity = int(self.amount_in_usd/pair.bid_price)
                 side = "Buy"
-            print(self.exchange.place_order(pair.symbol, side, quantity, price))
+            #print(self.exchange.place_order(pair.symbol, side, quantity, price))
 
 
 class Pair():
@@ -152,6 +170,10 @@ class Pair():
         self.short = True
         if pair['fundingRate'] < 0: self.short = False
         self.is_open = False
+        self.multiplier = pair['multiplier']
+        self.mid_price = pair['midPrice']
+        self.collateral = pair['quoteCurrency']
+        self.lots = pair['lotSize']
     
     def set_prices(self, _bid_price, _ask_price):
         self.bid_price = _bid_price
@@ -169,8 +191,8 @@ bot = Bot(bitmex)
 #bitmex.get_instruments()
 bot.get_top_pairs()
 #bot.open_positions()
-for pair in bot.pairs:
-    print(pair.symbol, pair.ask_price)
-print(bitmex.place_order("BMEXUSDT", "Sell", 1000, 0.5))
-
+# for pair in bot.pairs:
+#     print(pair.symbol, pair.ask_price, pair.multiplier)
+print(bitmex.place_order("MEMEUSDT", "Sell", 3300, 0.05))
+#bot.open_positions()
 
