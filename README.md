@@ -1,1 +1,1 @@
-# VolumeBot
+# FundingRateBot
