@@ -64,7 +64,7 @@ class Exchange():
         return isOpen, quantity
     
     def place_order(self, symbol, side, quantity, price):
-        endpoint = 'order?type=IFXXXP'
+        endpoint = 'order'
         url = self.base_url + endpoint
         data = {
             'symbol': symbol,
@@ -93,25 +93,27 @@ class Exchange():
         url = self.base_url + endpoint
         headers = self.generate_signature('GET', endpoint)
         response = session.get(url, headers=headers).json()
-        # symbol = response[0]['symbol']
-        # try:
-        #     print("try instruments")
-        #     symbol = response[0]['symbol']
-        #     print(type(symbol))
-        #     print(type(symbol) is str)
-        #     print(type(symbol) is int)
-        #     instruments = response[0]['bidPrice'], response[0]['askPrice']
-        # except KeyError as e:
-        #     bid,ask = self.get_quote()
-        #     pass
+        try:
+            print("try instruments")
+            test = " " + response[0]['symbol']
+        except KeyError as e:
+            response = self.get_instruments()
+        return response
+    
+    def get_user(self):
+        endpoint = f'user'
+        url = self.base_url + endpoint
+        headers = self.generate_signature('GET', endpoint)
+        response = session.get(url, headers=headers).json()
         return response
 
     
 class Bot():
     def __init__(self, _exchange):
         self.exchange = _exchange
-        self.amount_of_top = 5
+        self.amount_of_top = 2
         self.pairs = []
+        self.amount_in_usd = 150
         # self.sleeping_time = 5
         # self.black_time = 15
         # self.my_last_bid = 0
@@ -124,15 +126,21 @@ class Bot():
         for pair in response:
             if pair['typ'] == 'FFWCSX':
                 pairs.append(Pair(pair))
-        # for pair in pairs:
-        #     print(pair.symbol, pair.profit)
-        #     print()
         pairs.sort(key=lambda x: x.profit, reverse=True)
-        pairs = pairs[:self.amount_of_top]
-        #print("sorted!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
-        for pair in pairs:
-            print(pair.symbol, pair.profit)
-            print()
+        self.pairs = pairs[:self.amount_of_top]
+
+    def open_positions(self):
+        for pair in self.pairs:
+            if pair.is_open: continue
+            if pair.short:
+                price = pair.ask_price
+                quantity = int(self.amount_in_usd/pair.ask_price)
+                side = "Sell"
+            else:
+                price = pair.bid_price
+                quantity = int(self.amount_in_usd/pair.bid_price)
+                side = "Buy"
+            print(self.exchange.place_order(pair.symbol, side, quantity, price))
 
 
 class Pair():
@@ -143,23 +151,15 @@ class Pair():
         self.profit = (-2 * pair['makerFee']) + abs(pair['fundingRate'])
         self.short = True
         if pair['fundingRate'] < 0: self.short = False
-        self.isOpen = False
-
-    #  def ini2(self, _symbol, _bid_price, _ask_price, _funding_rate, _maker_fee):
-    #     self.symbol = _symbol
-    #     self.bid_price = _bid_price
-    #     self.ask_price = _ask_price
-    #     self.profit = (-2 * _maker_fee) + abs(_funding_rate)
-    #     self.short = True
-    #     if _funding_rate < 0: self.short = False
-    #     self.isOpen = False
+        self.is_open = False
     
     def set_prices(self, _bid_price, _ask_price):
         self.bid_price = _bid_price
         self.ask_price = _ask_price
 
-    def set_open(self):
-        self.isOpen = True
+    def set_open(self, _is_open = True):
+        self.is_open = _is_open
+
         
             
 
@@ -168,5 +168,9 @@ bitmex = Exchange(False)
 bot = Bot(bitmex)
 #bitmex.get_instruments()
 bot.get_top_pairs()
+#bot.open_positions()
+for pair in bot.pairs:
+    print(pair.symbol, pair.ask_price)
+print(bitmex.place_order("BMEXUSDT", "Sell", 1000, 0.5))
 
 
