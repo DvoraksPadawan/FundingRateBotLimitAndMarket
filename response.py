@@ -24,6 +24,7 @@
 'bidPrice': 2.46605
 'askPrice': 2.47932
 'typ': 'FFWCSX'
+'volume24h': 450
 
 
 {'symbol': 'XBTETH', 'rootSymbol': 'XBT', 'state': 'Open', 'typ': 'FFWCSX', 'listing': '2023-08-01T04:00:00.000Z', 

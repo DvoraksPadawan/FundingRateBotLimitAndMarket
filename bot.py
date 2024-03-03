@@ -118,7 +118,7 @@ class Bot():
         self.blackout_time = 3
         self.waiting_before_opening_positions = 300
         self.ending_opening_positions = 5
-        # self.my_last_bid = 0
+        # self.my_last_bid = 0  
         # self.my_last_ask = 0
         # self.my_last_quantity = 0
 
@@ -131,13 +131,16 @@ class Bot():
             if pair['typ'] == 'FFWCSX':
                 if pair['symbol'] == 'XBTUSD':
                     self.btc_price = pair['midPrice']
-                    self.set_funding_time(pair['fundingTimestamp'])
-                    #self.set_funding_time('2024-03-03T09:00:00.000Z')
+                    #self.set_funding_time(pair['fundingTimestamp'])
+                    self.set_funding_time('2024-03-03T10:41:00.000Z')
+                    continue
+                if pair['foreignNotional24h'] < 1000000:
                     continue
                 if pair['quoteCurrency'] == 'USDT' or pair['quoteCurrency'] == 'USD':
                     pairs.append(Pair(pair))
         pairs.sort(key=lambda x: x.profit, reverse=True)
         self.pairs = pairs[:self.amount_of_top]
+        print()
 
     def set_funding_time(self, funding_timestamp):
         self.funding_time = datetime.strptime(funding_timestamp, "%Y-%m-%dT%H:%M:%S.%fZ")
@@ -225,7 +228,7 @@ class Bot():
                 print("minutes until funding:", int(seconds_until_funding/60))
             time.sleep(1)
         self.get_top_pairs()
-        self.print_pairs()
+        #self.print_pairs()
         self.keep_opening_positions()
         seconds_until_funding = self.calculate_time()
         while seconds_until_funding > 0:
@@ -257,8 +260,14 @@ class Bot():
             self.exchange.place_order(pair.symbol, side, quantity, price, True)
         
     def print_pairs(self):
+        i = 0
+        #big = 0
         for pair in self.pairs:
-            print(pair.symbol, pair.profit)
+            i += 1
+            print(i, '{0:.4f}'.format(pair.profit), int(pair.volume), pair.symbol)
+            #if pair.volume > 100000: big += 1
+            #print(i, pair.symbol, pair.profit)
+        #print(big)
 
     def watch_clock(self):
         while True:
@@ -279,6 +288,7 @@ class Pair():
         self.collateral = pair['quoteCurrency']
         self.lots = pair['lotSize']
         self.quantity = 0
+        self.volume = pair['foreignNotional24h']
     
     def set_prices(self, _bid_price, _ask_price):
         self.bid_price = _bid_price
