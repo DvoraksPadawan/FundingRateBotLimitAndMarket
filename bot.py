@@ -118,7 +118,7 @@ class Bot():
         self.amount_of_top = 10
         #self.pairs = []
         self.amount_in_usd = 10
-        self.all_orders_filled = False
+        #self.all_orders_filled = False
         self.waiting_time_for_filling = 3
         self.blackout_time = 3
         self.waiting_before_opening_positions = 16000
@@ -170,7 +170,7 @@ class Bot():
             else:
                 price = pair.bid_price
                 side = "Buy"
-            print(self.exchange.place_order(pair.symbol, side, quantity, price))
+            self.exchange.place_order(pair.symbol, side, quantity, price)
 
     def update_prices(self, pair):
         bid, ask = self.exchange.get_quote(pair.symbol)
@@ -205,6 +205,7 @@ class Bot():
                 if pair.symbol == position['symbol']:
                     pair.quantity = position['currentQty']
                     if pair.quantity != 0: pair.is_filled = True
+                    else: pair.is_filled = False
                     #print(pair.symbol, pair.quantity)
 
     def check_fulfillness(self):
@@ -214,9 +215,12 @@ class Bot():
         return orders_filled
     
     def check_emptiness(self):
-        pass
+        orders_empty = True
+        for pair in self.pairs:
+            if pair.is_filled: orders_empty = False
+        return orders_empty
     
-    def manage_times(self):
+    def manage_time(self):
         self.get_top_pairs()
         seconds_until_funding = self.calculate_time()
         while seconds_until_funding > self.waiting_before_opening_positions:
@@ -229,8 +233,28 @@ class Bot():
         self.keep_closing_positions()
 
     def keep_closing_positions(self):
-        pass
+        orders_empty = False
+        while not orders_empty:
+            self.close_positions()
+            time.sleep(self.waiting_time_for_filling)
+            self.exchange.delete_all_orders()
+            #time.sleep(self.blackout_time)
+            self.update_positions()
+            orders_empty = self.check_emptiness()
 
+    def close_positions(self):
+        for pair in self.pairs:
+            if not pair.is_filled: continue
+            quantity = 5 * pair.quantity
+            print("quants:", pair.symbol, quantity)
+            self.update_prices(pair)
+            if not pair.short:
+                price = pair.ask_price
+                side = "Sell"
+            else:
+                price = pair.bid_price
+                side = "Buy"
+            print(self.exchange.place_order(pair.symbol, side, quantity, price, True))
 
 
 class Pair():
@@ -273,4 +297,4 @@ bot = Bot(bitmex)
 #bot.calculate_time()
 #bot.manage_times()
 print(bitmex.place_order('ADAUSD', 'Buy', 10, 0.3, True))
-
+#print(bitmex.place_order('ADAUSD', 'Buy', 10, 0.3))
