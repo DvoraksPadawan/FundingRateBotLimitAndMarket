@@ -112,11 +112,11 @@ class Bot():
         self.exchange = _exchange
         self.amount_of_top = 10
         #self.pairs = []
-        self.amount_in_usd = 20
+        self.amount_in_usd = 30
         #self.all_orders_filled = False
         self.waiting_time_for_filling = 5
         self.blackout_time = 3
-        self.waiting_before_opening_positions = 120
+        self.waiting_before_opening_positions = 180
         self.ending_opening_positions = 5
         # self.my_last_bid = 0
         # self.my_last_ask = 0
@@ -132,7 +132,7 @@ class Bot():
                 if pair['symbol'] == 'XBTUSD':
                     self.btc_price = pair['midPrice']
                     self.set_funding_time(pair['fundingTimestamp'])
-                    #self.set_funding_time('2024-03-03T01:25:00.000Z')
+                    #self.set_funding_time('2024-03-03T02:41:00.000Z')
                     continue
                 if pair['quoteCurrency'] == 'USDT' or pair['quoteCurrency'] == 'USD':
                     pairs.append(Pair(pair))
@@ -152,10 +152,12 @@ class Bot():
             if pair.is_filled: continue
             if pair.collateral == 'USDT':
                 price = pair.mid_price
+                quantity = int(self.amount_in_usd/price)
+                quantity = quantity*pair.lots
             else:
                 price = self.calculate_contract_price(pair)
-            quantity = int(self.amount_in_usd/price)
-            quantity = int(quantity/pair.lots)*pair.lots
+                quantity = int(self.amount_in_usd/price)
+                quantity = int(quantity/pair.lots)*pair.lots
             self.update_prices(pair)
             if pair.short:
                 price = pair.ask_price
@@ -284,3 +286,4 @@ class Pair():
 bitmex = Exchange(False)
 bot = Bot(bitmex)
 bot.manage_time()
+#print(bitmex.place_order('LINKUSDT', "Sell", 1000, 30))
