@@ -110,7 +110,7 @@ class Exchange():
 class Bot():
     def __init__(self, _exchange):
         self.exchange = _exchange
-        self.amount_of_top = 30
+        self.amount_of_top = 10
         #self.pairs = []
         self.amount_in_usd = 30
         #self.all_orders_filled = False
@@ -131,8 +131,8 @@ class Bot():
             if pair['typ'] == 'FFWCSX':
                 if pair['symbol'] == 'XBTUSD':
                     self.btc_price = pair['midPrice']
-                    #self.set_funding_time(pair['fundingTimestamp'])
-                    self.set_funding_time('2024-03-03T07:55:00.000Z')
+                    self.set_funding_time(pair['fundingTimestamp'])
+                    #self.set_funding_time('2024-03-03T09:00:00.000Z')
                     continue
                 if pair['quoteCurrency'] == 'USDT' or pair['quoteCurrency'] == 'USD':
                     pairs.append(Pair(pair))
@@ -142,8 +142,8 @@ class Bot():
     def set_funding_time(self, funding_timestamp):
         self.funding_time = datetime.strptime(funding_timestamp, "%Y-%m-%dT%H:%M:%S.%fZ")
 
-    def calculate_contract_price(self, pair, zeros):
-        price_in_btc = (pair.mid_price * pair.multiplier) / zeros
+    def calculate_contract_price(self, pair):
+        price_in_btc = (pair.mid_price * pair.multiplier) / 10**8
         price_in_usd = price_in_btc * self.btc_price
         return price_in_usd
     
@@ -153,12 +153,10 @@ class Bot():
             if pair.collateral == 'USDT':
                 price = pair.mid_price
                 quantity = int(self.amount_in_usd/price)
-                quantity = (quantity*pair.multiplier)/10**6
-                # price = self.calculate_contract_price(pair, 10**6)
-                # quantity = int(self.amount_in_usd/price)
-                # quantity = int(quantity/pair.lots)*pair.lots
+                quantity = (quantity*(10**6))/pair.multiplier
+                quantity = int(quantity/pair.lots)*pair.lots
             else:
-                price = self.calculate_contract_price(pair, 10**8)
+                price = self.calculate_contract_price(pair)
                 quantity = int(self.amount_in_usd/price)
                 quantity = int(quantity/pair.lots)*pair.lots
             self.update_prices(pair)
@@ -168,8 +166,7 @@ class Bot():
             else:
                 price = pair.bid_price
                 side = "Buy"
-            print(pair.symbol, pair.multiplier, quantity)
-            #self.exchange.place_order(pair.symbol, side, quantity, price)
+            self.exchange.place_order(pair.symbol, side, quantity, price)
 
     def update_prices(self, pair):
         bid, ask = self.exchange.get_quote(pair.symbol)
@@ -224,8 +221,11 @@ class Bot():
         seconds_until_funding = self.calculate_time()
         while seconds_until_funding > self.waiting_before_opening_positions:
             seconds_until_funding = self.calculate_time()
+            if seconds_until_funding % 60 == 0:
+                print("minutes until funding:", int(seconds_until_funding/60))
             time.sleep(1)
         self.get_top_pairs()
+        self.print_pairs()
         self.keep_opening_positions()
         seconds_until_funding = self.calculate_time()
         while seconds_until_funding > 0:
@@ -260,6 +260,10 @@ class Bot():
         for pair in self.pairs:
             print(pair.symbol, pair.profit)
 
+    def watch_clock(self):
+        while True:
+            self.manage_time()
+
 
 class Pair():
     def __init__(self, pair):
@@ -289,7 +293,4 @@ class Pair():
 
 bitmex = Exchange(False)
 bot = Bot(bitmex)
-#bot.manage_time()
-#print(bitmex.place_order('DOGEUSDT', "Sell", 20000, 0.14))
-#print(bitmex.place_order('MEMEUSDT', "Sell", 600, 0.05))
-#print(bitmex.place_order('LINKUSDT', "Sell", 1000, 30, True))
+bot.manage_time()
