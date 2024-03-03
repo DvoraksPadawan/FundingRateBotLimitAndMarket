@@ -111,16 +111,11 @@ class Bot():
     def __init__(self, _exchange):
         self.exchange = _exchange
         self.amount_of_top = 10
-        #self.pairs = []
         self.amount_in_usd = 30
-        #self.all_orders_filled = False
         self.waiting_time_for_filling = 5
         self.blackout_time = 3
         self.waiting_before_opening_positions = 300
         self.ending_opening_positions = 5
-        # self.my_last_bid = 0  
-        # self.my_last_ask = 0
-        # self.my_last_quantity = 0
 
 
     def get_top_pairs(self):
@@ -131,8 +126,8 @@ class Bot():
             if pair['typ'] == 'FFWCSX':
                 if pair['symbol'] == 'XBTUSD':
                     self.btc_price = pair['midPrice']
-                    #self.set_funding_time(pair['fundingTimestamp'])
-                    self.set_funding_time('2024-03-03T10:41:00.000Z')
+                    self.set_funding_time(pair['fundingTimestamp'])
+                    #self.set_funding_time('2024-03-03T10:41:00.000Z')
                     continue
                 if pair['foreignNotional24h'] < 1000000:
                     continue
@@ -228,7 +223,7 @@ class Bot():
                 print("minutes until funding:", int(seconds_until_funding/60))
             time.sleep(1)
         self.get_top_pairs()
-        #self.print_pairs()
+        self.print_pairs()
         self.keep_opening_positions()
         seconds_until_funding = self.calculate_time()
         while seconds_until_funding > 0:
@@ -261,13 +256,9 @@ class Bot():
         
     def print_pairs(self):
         i = 0
-        #big = 0
         for pair in self.pairs:
             i += 1
             print(i, '{0:.4f}'.format(pair.profit), int(pair.volume), pair.symbol)
-            #if pair.volume > 100000: big += 1
-            #print(i, pair.symbol, pair.profit)
-        #print(big)
 
     def watch_clock(self):
         while True:
@@ -303,4 +294,5 @@ class Pair():
 
 bitmex = Exchange(False)
 bot = Bot(bitmex)
-bot.manage_time()
+#bot.manage_time()
+bot.watch_clock()
