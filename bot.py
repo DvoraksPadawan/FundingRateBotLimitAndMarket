@@ -111,7 +111,7 @@ class Bot():
     def __init__(self, _exchange):
         self.exchange = _exchange
         self.amount_of_top = 10
-        self.amount_in_usd = 1000
+        self.amount_in_usd = 2000
         self.waiting_time_for_filling = 5
         self.blackout_time = 3
         self.waiting_before_opening_positions = 300
