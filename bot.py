@@ -111,7 +111,7 @@ class Bot():
     def __init__(self, _exchange):
         self.exchange = _exchange
         self.amount_of_top = 10
-        self.amount_in_usd = 200
+        self.amount_in_usd = 1000
         self.waiting_time_for_filling = 5
         self.blackout_time = 3
         self.waiting_before_opening_positions = 300
@@ -126,8 +126,8 @@ class Bot():
             if pair['typ'] == 'FFWCSX':
                 if pair['symbol'] == 'XBTUSD':
                     self.btc_price = pair['midPrice']
-                    #self.set_funding_time(pair['fundingTimestamp'])
-                    self.set_funding_time('2024-03-04T04:56:00.000Z')
+                    self.set_funding_time(pair['fundingTimestamp'])
+                    #self.set_funding_time('2024-03-04T05:30:00.000Z')
                     continue
                 if pair['foreignNotional24h'] < 1000000:
                     continue
@@ -148,7 +148,7 @@ class Bot():
     def open_positions(self):
         for pair in self.pairs:
             if pair.is_filled: continue
-            quantity = pair.qty_to_fill - pair.quantity
+            quantity = pair.qty_to_fill - abs(pair.quantity)
             self.update_prices(pair)
             if pair.short:
                 price = pair.ask_price
@@ -157,7 +157,7 @@ class Bot():
                 price = pair.bid_price
                 side = "Buy"
             self.exchange.place_order(pair.symbol, side, quantity, price)
-            print()
+            
 
     def calculate_quantities(self):
         for pair in self.pairs:
