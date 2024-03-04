@@ -111,11 +111,11 @@ class Bot():
     def __init__(self, _exchange):
         self.exchange = _exchange
         self.amount_of_top = 10
-        self.amount_in_usd = 30
+        self.amount_in_usd = 200
         self.waiting_time_for_filling = 5
         self.blackout_time = 3
         self.waiting_before_opening_positions = 300
-        self.ending_opening_positions = 5
+        self.ending_opening_positions = 10
 
 
     def get_top_pairs(self):
@@ -126,8 +126,8 @@ class Bot():
             if pair['typ'] == 'FFWCSX':
                 if pair['symbol'] == 'XBTUSD':
                     self.btc_price = pair['midPrice']
-                    self.set_funding_time(pair['fundingTimestamp'])
-                    #self.set_funding_time('2024-03-03T10:41:00.000Z')
+                    #self.set_funding_time(pair['fundingTimestamp'])
+                    self.set_funding_time('2024-03-04T04:56:00.000Z')
                     continue
                 if pair['foreignNotional24h'] < 1000000:
                     continue
@@ -148,6 +148,19 @@ class Bot():
     def open_positions(self):
         for pair in self.pairs:
             if pair.is_filled: continue
+            quantity = pair.qty_to_fill - pair.quantity
+            self.update_prices(pair)
+            if pair.short:
+                price = pair.ask_price
+                side = "Sell"
+            else:
+                price = pair.bid_price
+                side = "Buy"
+            self.exchange.place_order(pair.symbol, side, quantity, price)
+            print()
+
+    def calculate_quantities(self):
+        for pair in self.pairs:
             if pair.collateral == 'USDT':
                 price = pair.mid_price
                 quantity = int(self.amount_in_usd/price)
@@ -157,15 +170,8 @@ class Bot():
                 price = self.calculate_contract_price(pair)
                 quantity = int(self.amount_in_usd/price)
                 quantity = int(quantity/pair.lots)*pair.lots
-            self.update_prices(pair)
-            if pair.short:
-                price = pair.ask_price
-                side = "Sell"
-            else:
-                price = pair.bid_price
-                side = "Buy"
-            self.exchange.place_order(pair.symbol, side, quantity, price)
-
+            pair.qty_to_fill = quantity
+    
     def update_prices(self, pair):
         bid, ask = self.exchange.get_quote(pair.symbol)
         pair.set_prices(bid, ask)
@@ -180,6 +186,7 @@ class Bot():
 
     def keep_opening_positions(self):
         orders_filled = False
+        self.calculate_quantities()
         while not orders_filled:
             seconds_until_funding = self.calculate_time()
             if seconds_until_funding < self.ending_opening_positions:
@@ -198,7 +205,9 @@ class Bot():
             for pair in self.pairs:
                 if pair.symbol == position['symbol']:
                     pair.quantity = position['currentQty']
-                    if pair.quantity != 0: pair.is_filled = True
+                    if pair.quantity == 0: pair.is_empty = True
+                    else: pair.is_empty = False
+                    if pair.quantity == pair.qty_to_fill: pair.is_filled = True
                     else: pair.is_filled = False
 
     def check_fulfillness(self):
@@ -210,7 +219,7 @@ class Bot():
     def check_emptiness(self):
         orders_empty = True
         for pair in self.pairs:
-            if pair.is_filled: orders_empty = False
+            if not pair.is_empty: orders_empty = False
         return orders_empty
     
     def manage_time(self):
@@ -227,8 +236,8 @@ class Bot():
         self.keep_opening_positions()
         seconds_until_funding = self.calculate_time()
         while seconds_until_funding > 0:
-            seconds_until_funding = self.calculate_time()
             time.sleep(1)
+            seconds_until_funding = self.calculate_time()
         self.keep_closing_positions()
 
     def keep_closing_positions(self):
@@ -243,8 +252,8 @@ class Bot():
 
     def close_positions(self):
         for pair in self.pairs:
-            if not pair.is_filled: continue
-            quantity = 5 * pair.quantity
+            if pair.is_empty: continue
+            quantity = 2 * pair.quantity
             self.update_prices(pair)
             if not pair.short:
                 price = pair.ask_price
@@ -280,6 +289,8 @@ class Pair():
         self.lots = pair['lotSize']
         self.quantity = 0
         self.volume = pair['foreignNotional24h']
+        self.qty_to_fill = 0
+        self.is_empty = True
     
     def set_prices(self, _bid_price, _ask_price):
         self.bid_price = _bid_price
