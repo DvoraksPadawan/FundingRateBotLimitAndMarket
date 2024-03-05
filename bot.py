@@ -23,8 +23,6 @@ class Exchange():
             self.base_url = 'https://testnet.bitmex.com/api/v1/'
         else:
             self.base_url = 'https://www.bitmex.com/api/v1/'
-        #self.symbol = 'XBTUSDT'
-        #self.standard_quantity = 1000
     
     def generate_signature(self, method, endpoint, data = ''):
         url = '/api/v1/' + endpoint
@@ -61,20 +59,21 @@ class Exchange():
             response = self.get_position()
         return response
     
-    def place_order(self, symbol, side, quantity, price, reduce_only = False):
+    def place_order(self, symbol, side, ord_type, quantity, price = 0, reduce_only = False):
         endpoint = 'order'
         url = self.base_url + endpoint
         data = {
             'symbol': symbol,
             'side': side,
             'orderQty': quantity,
-            'price': price,
-            'ordType': 'Limit',
+            'ordType': ord_type,
             'execInst' : 'ParticipateDoNotInitiate',
             'typ': 'IFXXXP'
         }
+        if price > 0:
+            data['price'] = price
         if reduce_only:
-            data['execInst'] = 'ParticipateDoNotInitiate', 'ReduceOnly'
+            data['execInst'] = 'ReduceOnly'
         data_json = json.dumps(data)
         headers = self.generate_signature('POST', endpoint, data_json)
         headers['Content-Type'] = 'application/json'
@@ -99,23 +98,28 @@ class Exchange():
             response = self.get_instruments()
         return response
     
-    def get_user(self):
-        endpoint = f'user'
+    def get_instrument(self, symbol):
+        endpoint = f'instrument?symbol={symbol}'
         url = self.base_url + endpoint
         headers = self.generate_signature('GET', endpoint)
         response = session.get(url, headers=headers).json()
+        try:
+            test = " " + response[0]['fundingTimestamp']
+        except KeyError as e:
+            response = self.get_instruments()
         return response
 
     
 class Bot():
     def __init__(self, _exchange):
         self.exchange = _exchange
-        self.amount_of_top = 10
-        self.amount_in_usd = 2000
+        self.amount_of_top = 2
+        self.amount_in_usd = 30
         self.waiting_time_for_filling = 5
         self.blackout_time = 3
-        self.waiting_before_opening_positions = 300
-        self.ending_opening_positions = 10
+        self.waiting_before_opening_positions = 60
+        self.ending_opening_positions = 15
+        self.default_instrument = "XBTUSDT"
 
 
     def get_top_pairs(self):
@@ -124,20 +128,19 @@ class Bot():
         pairs = []
         for pair in response:
             if pair['typ'] == 'FFWCSX':
-                if pair['symbol'] == 'XBTUSD':
-                    self.btc_price = pair['midPrice']
-                    self.set_funding_time(pair['fundingTimestamp'])
-                    #self.set_funding_time('2024-03-04T05:30:00.000Z')
-                    continue
                 if pair['foreignNotional24h'] < 1000000:
                     continue
                 if pair['quoteCurrency'] == 'USDT' or pair['quoteCurrency'] == 'USD':
                     pairs.append(Pair(pair))
         pairs.sort(key=lambda x: x.profit, reverse=True)
         self.pairs = pairs[:self.amount_of_top]
-        print()
-
-    def set_funding_time(self, funding_timestamp):
+        
+    def update_market_values(self):
+        btc = self.exchange.get_instrument(self.default_instrument)[0]
+        self.btc_price = btc['midPrice']
+        #funding_timestamp = btc['fundingTimestamp']
+        #for testing:
+        funding_timestamp = '2024-03-05T23:35:00.000Z'
         self.funding_time = datetime.strptime(funding_timestamp, "%Y-%m-%dT%H:%M:%S.%fZ")
 
     def calculate_contract_price(self, pair):
@@ -156,7 +159,7 @@ class Bot():
             else:
                 price = pair.bid_price
                 side = "Buy"
-            self.exchange.place_order(pair.symbol, side, quantity, price)
+            self.exchange.place_order(pair.symbol, side, 'Limit', quantity, price = price)
             
 
     def calculate_quantities(self):
@@ -179,9 +182,9 @@ class Bot():
     def calculate_time(self):
         time_now = datetime.now()
         if self.funding_time < time_now:
-            return -1
-        else:
-            countdown = self.funding_time - time_now
+            print("error: next funding in past")
+            exit()
+        countdown = self.funding_time - time_now
         return countdown.seconds
 
     def keep_opening_positions(self):
@@ -216,58 +219,46 @@ class Bot():
             if not pair.is_filled: orders_filled = False
         return orders_filled
     
-    def check_emptiness(self):
-        orders_empty = True
-        for pair in self.pairs:
-            if not pair.is_empty: orders_empty = False
-        return orders_empty
-    
     def manage_time(self):
-        self.get_top_pairs()
-        self.print_pairs()
+        self.init_pairs()
         seconds_until_funding = self.calculate_time()
         while seconds_until_funding > self.waiting_before_opening_positions:
+            time.sleep(1)
             seconds_until_funding = self.calculate_time()
             if seconds_until_funding % 60 == 0:
                 print("minutes until funding:", int(seconds_until_funding/60))
-            time.sleep(1)
-        self.get_top_pairs()
-        self.print_pairs()
+        self.init_pairs()
         self.keep_opening_positions()
-        seconds_until_funding = self.calculate_time()
-        while seconds_until_funding > 0:
+        while self.funding_time == self.get_next_funding_time():
+            print(datetime.now())
             time.sleep(1)
-            seconds_until_funding = self.calculate_time()
-        self.keep_closing_positions()
+        self.close_positions()
 
-    def keep_closing_positions(self):
-        orders_empty = False
-        while not orders_empty:
-            self.close_positions()
-            time.sleep(self.waiting_time_for_filling)
-            self.exchange.delete_all_orders()
-            time.sleep(self.blackout_time)
-            self.update_positions()
-            orders_empty = self.check_emptiness()
 
     def close_positions(self):
         for pair in self.pairs:
-            if pair.is_empty: continue
             quantity = 2 * pair.quantity
-            self.update_prices(pair)
             if not pair.short:
-                price = pair.ask_price
                 side = "Sell"
             else:
-                price = pair.bid_price
                 side = "Buy"
-            self.exchange.place_order(pair.symbol, side, quantity, price, True)
+            print(self.exchange.place_order(pair.symbol, side, 'Market', quantity, reduce_only = True))
         
     def print_pairs(self):
         i = 0
         for pair in self.pairs:
             i += 1
             print(i, '{0:.4f}'.format(pair.profit), int(pair.volume), pair.symbol)
+
+    def init_pairs(self):
+        self.update_market_values()
+        self.get_top_pairs()
+        self.print_pairs()
+
+    def get_next_funding_time(self):
+        funding_timestamp = self.exchange.get_instrument(self.default_instrument)[0]['fundingTimestamp']
+        funding_time = datetime.strptime(funding_timestamp, "%Y-%m-%dT%H:%M:%S.%fZ")
+        return funding_time
 
     def watch_clock(self):
         while True:
@@ -290,7 +281,6 @@ class Pair():
         self.quantity = 0
         self.volume = pair['foreignNotional24h']
         self.qty_to_fill = 0
-        self.is_empty = True
     
     def set_prices(self, _bid_price, _ask_price):
         self.bid_price = _bid_price
