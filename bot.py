@@ -113,12 +113,12 @@ class Exchange():
 class Bot():
     def __init__(self, _exchange):
         self.exchange = _exchange
-        self.amount_of_top = 2
-        self.amount_in_usd = 30
+        self.amount_of_top = 10
+        self.amount_in_usd = 20
         self.waiting_time_for_filling = 5
         self.blackout_time = 3
-        self.waiting_before_opening_positions = 60
-        self.ending_opening_positions = 15
+        self.waiting_before_opening_positions = 600
+        self.ending_opening_positions = 10
         self.default_instrument = "XBTUSDT"
 
 
@@ -138,9 +138,9 @@ class Bot():
     def update_market_values(self):
         btc = self.exchange.get_instrument(self.default_instrument)[0]
         self.btc_price = btc['midPrice']
-        #funding_timestamp = btc['fundingTimestamp']
+        funding_timestamp = btc['fundingTimestamp']
         #for testing:
-        funding_timestamp = '2024-03-05T23:35:00.000Z'
+        #funding_timestamp = '2024-03-06T00:21:00.000Z'
         self.funding_time = datetime.strptime(funding_timestamp, "%Y-%m-%dT%H:%M:%S.%fZ")
 
     def calculate_contract_price(self, pair):
@@ -182,8 +182,7 @@ class Bot():
     def calculate_time(self):
         time_now = datetime.now()
         if self.funding_time < time_now:
-            print("error: next funding in past")
-            exit()
+            return -1
         countdown = self.funding_time - time_now
         return countdown.seconds
 
@@ -222,6 +221,9 @@ class Bot():
     def manage_time(self):
         self.init_pairs()
         seconds_until_funding = self.calculate_time()
+        if seconds_until_funding == -1:
+            print("error: next funding in past")
+            exit()
         while seconds_until_funding > self.waiting_before_opening_positions:
             time.sleep(1)
             seconds_until_funding = self.calculate_time()
@@ -237,7 +239,7 @@ class Bot():
 
     def close_positions(self):
         for pair in self.pairs:
-            quantity = 2 * pair.quantity
+            quantity = 2 * abs(pair.quantity)
             if not pair.short:
                 side = "Sell"
             else:
@@ -263,6 +265,8 @@ class Bot():
     def watch_clock(self):
         while True:
             self.manage_time()
+            print("another round")
+            time.sleep(1)
 
 
 class Pair():
